@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import WelcomeNavbar from "../../components/welcome/welcomeNavbar";
+import InWelcomeNavbar from "../../components/welcome/InWelcomeNavbar ";
 
 const WelcomeScreen = () => {
   const navigate = useNavigate();
@@ -12,7 +12,7 @@ const WelcomeScreen = () => {
   return (
     <div className="min-h-screen flex flex-col bg-white">
       {/* Top Navbar */}
-      <WelcomeNavbar />
+      <InWelcomeNavbar />
 
       {/* Image Section */}
       <div

@@ -1,6 +1,6 @@
 import LanguageSelect from "../languageSelector/LanguageSelector";
 
-const WelcomeNavbar = () => {
+const InWelcomeNavbar = () => {
   return (
     <nav className=" flex items-center justify-between bg-gray-50 ">
       {/* Left - Logo */}
@@ -14,4 +14,4 @@ const WelcomeNavbar = () => {
   );
 };
 
-export default WelcomeNavbar;
+export default InWelcomeNavbar;
