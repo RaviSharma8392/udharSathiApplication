@@ -27,6 +27,7 @@ function AllCustomers() {
     }
     loadCustomers();
   }, []);
+  console.log(customers);
 
   const filteredCustomers = customers.filter(
     (c) =>
@@ -37,7 +38,7 @@ function AllCustomers() {
   const visibleCustomers = filteredCustomers.slice(0, visibleCount);
 
   useEffect(() => {
-    if (!loadMoreRef.current) return;
+    if (!loadMoreRef.current || filteredCustomers.length === 0) return;
 
     const observer = new IntersectionObserver((entries) => {
       if (entries[0].isIntersecting) {

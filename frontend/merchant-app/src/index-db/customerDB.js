@@ -4,94 +4,80 @@ import { dbPromise } from "./index";
 export async function addCustomer(customer) {
   const db = await dbPromise;
 
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction("customers", "readwrite");
-    tx.objectStore("customers").add({
-      ...customer,
-      balance: customer.balance ?? 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
-
-    tx.oncomplete = () => resolve(true);
-    tx.onerror = () => reject("Add customer failed");
+  return db.add("customers", {
+    ...customer,
+    balance: customer.balance ?? 0,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   });
 }
+
 
 /* ---------------- GET CUSTOMER BY ID ---------------- */
 export async function getCustomerById(id) {
   const db = await dbPromise;
-
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction("customers", "readonly");
-    const store = tx.objectStore("customers");
-    const request = store.get(Number(id));
-
-    request.onsuccess = () => resolve(request.result || null);
-    request.onerror = () => reject("Failed to get customer");
-  });
+  return db.get("customers", Number(id));
 }
+
 
 /* ---------------- GET ALL CUSTOMERS ---------------- */
 export async function getAllCustomers() {
   const db = await dbPromise;
+  const customers = await db.getAll("customers");
 
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction("customers", "readonly");
-    const store = tx.objectStore("customers");
-    const request = store.getAll();
-
-    request.onsuccess = () => {
-      const customers = request.result || [];
-      customers.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      resolve(customers);
-    };
-
-    request.onerror = () => reject("Failed to get customers");
-  });
+  return customers.sort(
+    (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+  );
 }
+
 
 /* ---------------- UPDATE CUSTOMER BALANCE ---------------- */
 export async function updateCustomerBalance(id, { amount, type }) {
   const db = await dbPromise;
 
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction("customers", "readwrite");
-    const store = tx.objectStore("customers");
+  const normalizedType = String(type).trim().toUpperCase();
+  const numericAmount = Number(amount);
 
-    const getReq = store.get(Number(id));
-    getReq.onsuccess = () => {
-      const customer = getReq.result;
-      if (!customer) return reject("Customer not found");
+  if (!numericAmount || numericAmount <= 0) {
+    throw new Error("Invalid amount");
+  }
 
-      const currentBalance = Number(customer.balance) || 0;
-      const numericAmount = Number(amount) || 0;
-      let newBalance = currentBalance;
+  const customer = await db.get("customers", Number(id));
+  if (!customer) throw new Error("Customer not found");
 
-      if (type === "UDHAR") newBalance += numericAmount;
-      else if (type === "PAYMENT") newBalance -= numericAmount;
+  const currentBalance = Number(customer.balance) || 0;
 
-      store.put({
-        ...customer,
-        balance: newBalance,
-        updatedAt: new Date().toISOString(),
-      });
-    };
+  let newBalance = currentBalance;
 
-    tx.oncomplete = () => resolve(true);
-    tx.onerror = () => reject("Update customer balance failed");
-  });
+  if (normalizedType === "UDHAR") {
+    newBalance += numericAmount;
+  } else if (normalizedType === "PAYMENT") {
+    newBalance -= numericAmount;
+  } else {
+    throw new Error("Invalid transaction type");
+  }
+
+  customer.balance = newBalance;
+  customer.updatedAt = new Date().toISOString();
+
+  return db.put("customers", customer);
 }
+
 
 /* ---------------- DELETE CUSTOMER BY ID ---------------- */
 export async function deleteCustomerById(id) {
   const db = await dbPromise;
+  return db.delete("customers", Number(id));
+}
 
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction("customers", "readwrite");
-    tx.objectStore("customers").delete(Number(id));
 
-    tx.oncomplete = () => resolve(true);
-    tx.onerror = () => reject("Delete customer failed");
-  });
+export async function searchCustomers(query) {
+  const db = await dbPromise;
+  const customers = await db.getAll("customers");
+
+  return customers.filter(
+    (c) =>
+      c.name?.toLowerCase().includes(query.toLowerCase()) ||
+      c.phone?.includes(query)
+  );
 }

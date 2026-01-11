@@ -4,13 +4,12 @@ import TransactionButton from "./button/TransactionButton";
 import TransactionSuccess from "./TransactionSuccess";
 
 import { addTransaction } from "../index-db/transactionDB";
-// import { updateCustomerById } from "../index-db/customerDB";
+import { updateCustomerBalance, getCustomerById } from "../index-db/customerDB";
 
 import transactionPopupText from "../i18n/transactionPopup";
 import { t } from "../utils/t";
-import { updateCustomerBalance } from "../index-db/customerDB";
 
-export const TransactionModalPopUP = ({ lang, customer, balance }) => {
+export const TransactionModalPopUP = ({ lang, customer }) => {
   const [modalType, setModalType] = useState(null);
   const [successData, setSuccessData] = useState(null);
 
@@ -18,27 +17,36 @@ export const TransactionModalPopUP = ({ lang, customer, balance }) => {
 
   /* ================= HANDLE TRANSACTION ================= */
   const handleSubmit = async (tx) => {
+    const numericAmount = Number(tx.amount);
+
+    // 🔥 Fetch the latest balance directly from DB
+    const latestCustomer = await getCustomerById(customerId);
+    const currentBalance = Number(latestCustomer.balance || 0);
+
+    const newBalance =
+      tx.type === "UDHAR"
+        ? currentBalance + numericAmount
+        : currentBalance - numericAmount;
+
     const finalTx = {
       ...tx,
+      amount: numericAmount,
       customerId,
+      balanceAfter: newBalance, // Store actual balance after transaction
+      date: new Date().toISOString(),
     };
 
-    try {
-      // 1️⃣ Save transaction
-      await addTransaction(finalTx);
+    // 1️⃣ Add transaction to DB
+    await addTransaction(finalTx);
 
-      // 2️⃣ Update customer balance
-      await updateCustomerBalance(customerId, {
-        amount: tx.amount,
-        type: tx.type, // "UDHAR" or "PAYMENT"
-      });
+    // 2️⃣ Update customer's balance
+    await updateCustomerBalance(customerId, {
+      amount: numericAmount,
+      type: tx.type,
+    });
 
-      // 3️⃣ Show success screen
-      setSuccessData(finalTx);
-      setModalType(null);
-    } catch (err) {
-      console.error("Failed to save transaction", err);
-    }
+    // 3️⃣ Show success
+    setSuccessData(finalTx);
   };
 
   /* ================= SUCCESS SCREEN ================= */
@@ -97,7 +105,7 @@ export const TransactionModalPopUP = ({ lang, customer, balance }) => {
         customer={customer}
         onClose={() => setModalType(null)}
         onSubmit={handleSubmit}
-        balance={balance}
+        balance={customer.balance} // Can also pass latestCustomer.balance if needed
         lang={lang}
       />
     </>

@@ -56,6 +56,7 @@ const TransactionsHistoryPage = () => {
 
     setTransactions((prev) => {
       if (reset) return data;
+      console.log(data);
 
       const map = new Map();
       [...prev, ...data].forEach((tx) => map.set(`${tx.id}-${tx.date}`, tx));

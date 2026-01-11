@@ -1,198 +1,216 @@
 import { dbPromise } from "./index";
 
-/* ---------------- ADD TRANSACTION ---------------- */
+/**
+ * Add a transaction with dynamic transaction ID
+ * Minimal storage: only customerId, amount, type, balanceBefore, balanceAfter, date
+ * @param {Object} txData - { customerId, type: "UDHAR"|"PAYMENT", amount, balanceBefore }
+ */
 export async function addTransaction(txData) {
   const db = await dbPromise;
 
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction("transactions", "readwrite");
-    tx.objectStore("transactions").add({
-      ...txData,
-      createdAt: new Date().toISOString(),
-    });
+  if (!txData.customerId) throw new Error("customerId is required");
+  if (!txData.type) throw new Error("Transaction type is required");
+  if (txData.amount == null) throw new Error("Transaction amount is required");
 
-    tx.oncomplete = () => resolve(true);
-    tx.onerror = () => reject("Add transaction failed");
+  // 1️ Calculate balances if not already provided
+  const balanceBefore = Number(txData.balanceBefore ?? 0);
+  const amount = Number(txData.amount);
+
+  let balanceAfter = balanceBefore;
+  if (txData.type === "UDHAR") balanceAfter += amount;
+  else if (txData.type === "PAYMENT") balanceAfter -= amount;
+
+  // 2 Generate dynamic transaction ID
+  const timestamp = Date.now(); // milliseconds
+  const random2Digits = Math.floor(Math.random() * 90 + 10); // 10-99
+  const transactionId = `TX-${timestamp}-${txData.customerId}-${random2Digits}`;
+
+  // 3️ Save minimal transaction
+  return db.add("transactions", {
+    id: transactionId,
+    customerId: txData.customerId,
+    type: txData.type,
+    amount,
+    balanceBefore,
+    balanceAfter,
+    date: new Date().toISOString(),
   });
 }
 
-/* ---------------- GET TRANSACTIONS BY CUSTOMER ---------------- */
+
+// GET TRANSACTIONS BY CUSTOMER
 export async function getTransactionsByCustomer(customerId) {
   const db = await dbPromise;
 
-  return new Promise((resolve) => {
-    const tx = db.transaction("transactions", "readonly");
-    const store = tx.objectStore("transactions");
-    const index = store.index("customerId");
-    const request = index.getAll(customerId);
-
-    request.onsuccess = () => resolve(request.result || []);
-  });
+  return db.getAllFromIndex(
+    "transactions",
+    "customerId",
+    Number(customerId)
+  );
 }
 
-/* ---------------- GET RECENT TRANSACTIONS ---------------- */
+
+// GET RECENT TRANSACTIONS (with customer info)
+
+
 export async function getRecentTransactions(limit = 10) {
   const db = await dbPromise;
+  const results = [];
 
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(["transactions", "customers"], "readonly");
-    const txStore = tx.objectStore("transactions");
-    const customerStore = tx.objectStore("customers");
+  let cursor = await db
+    .transaction(["transactions", "customers"])
+    .objectStore("transactions")
+    .openCursor(null, "prev");
 
-    const req = txStore.openCursor(null, "prev"); // latest first
-    const results = [];
+  while (cursor && results.length < limit) {
+    const tx = cursor.value;
+    const customer =
+      (await db.get("customers", tx.customerId)) || {};
 
-    req.onsuccess = (event) => {
-      const cursor = event.target.result;
+    results.push({
+      ...tx,
+      customerName: customer.name || "Unknown",
+      customerPhone: customer.phone || "N/A",
+    });
 
-      if (cursor && results.length < limit) {
-        const transaction = cursor.value;
+    cursor = await cursor.continue();
+  }
 
-        const customerReq = customerStore.get(transaction.customerId);
-        customerReq.onsuccess = () => {
-          const customer = customerReq.result || { name: "Unknown", phone: "N/A" };
-
-          results.push({
-            ...transaction,
-            customerName: customer.name,
-            customerPhone: customer.phone,
-          });
-
-          cursor.continue();
-        };
-
-        customerReq.onerror = () => {
-          results.push({
-            ...transaction,
-            customerName: "Unknown",
-            customerPhone: "N/A",
-          });
-          cursor.continue();
-        };
-      } else {
-        resolve(results);
-      }
-    };
-
-    req.onerror = () => reject("Failed to fetch recent transactions");
-  });
+  return results;
 }
 
-/* ---------------- CALCULATE TOTALS ---------------- */
-export async function calculateTotals({ type = "ALL", customerId = null } = {}) {
+
+// CALCULATE TOTALS (FAST & CLEAN)
+
+export async function calculateTotals({ type = "ALL", customerId } = {}) {
   const db = await dbPromise;
-  const tx = db.transaction("transactions", "readonly");
-  const store = tx.objectStore("transactions");
 
-  return new Promise((resolve, reject) => {
-    const req = store.openCursor(null, "prev"); // latest first
-    let totalUdhar = 0;
-    let totalPayment = 0;
+  let totalUdhar = 0;
+  let totalPayment = 0;
 
-    const now = new Date();
-    let fromDate = null;
+  const now = new Date();
+  let fromDate = null;
 
-    switch (type) {
-      case "TODAY":
-        fromDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        break;
-      case "LAST_7_DAYS":
-        fromDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        break;
-      case "LAST_MONTH":
-        fromDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
-        break;
-      case "LAST_YEAR":
-        fromDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
-        break;
-      default:
-        fromDate = null;
+  if (type === "TODAY")
+    fromDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  else if (type === "LAST_7_DAYS")
+    fromDate = new Date(now - 7 * 24 * 60 * 60 * 1000);
+  else if (type === "LAST_MONTH")
+    fromDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+  else if (type === "LAST_YEAR")
+    fromDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+
+  let cursor = await db
+    .transaction("transactions")
+    .objectStore("transactions")
+    .openCursor();
+
+  while (cursor) {
+    const tx = cursor.value;
+
+    if (!customerId || tx.customerId === customerId) {
+      const txDate = new Date(tx.date || tx.createdAt);
+      if (!fromDate || txDate >= fromDate) {
+        const amt = Number(tx.amount) || 0;
+        if (tx.type === "UDHAR") totalUdhar += amt;
+        if (tx.type === "PAYMENT") totalPayment += amt;
+      }
     }
 
-    req.onsuccess = (event) => {
-      const cursor = event.target.result;
-      if (cursor) {
-        const txData = cursor.value;
+    cursor = await cursor.continue();
+  }
 
-        if (!customerId || txData.customerId === customerId) {
-          const txDate = new Date(txData.date || txData.createdAt);
-          if (!fromDate || txDate >= fromDate) {
-            const amount = Number(txData.amount) || 0;
-            if (txData.type === "UDHAR") totalUdhar += amount;
-            else if (txData.type === "PAYMENT") totalPayment += amount;
-          }
-        }
+  return { totalUdhar, totalPayment };
+}
+// PAGINATED TRANSACTIONS
 
-        cursor.continue();
+
+export async function getTransactionsPaginated(
+  limit = 10,
+  offset = 0,
+  type = "ALL"
+) {
+  const db = await dbPromise;
+  const results = [];
+  let skipped = 0;
+
+  let cursor = await db
+    .transaction(["transactions", "customers"])
+    .objectStore("transactions")
+    .openCursor(null, "prev");
+
+  while (cursor && results.length < limit) {
+    const tx = cursor.value;
+
+    if (type === "ALL" || tx.type === type) {
+      if (skipped < offset) {
+        skipped++;
       } else {
-        resolve({ totalUdhar, totalPayment });
-      }
-    };
+        const customer =
+          (await db.get("customers", tx.customerId)) || {};
 
-    req.onerror = () => reject("Failed to calculate totals");
-  });
+        results.push({
+          ...tx,
+          customerName: customer.name || "Unknown",
+          customerPhone: customer.phone || "N/A",
+        });
+      }
+    }
+
+    cursor = await cursor.continue();
+  }
+
+  return results;
 }
 
 
+// Number of transactions per page
+const PAGE_SIZE = 7;
 
-/* ---------------- GET TRANSACTIONS PAGINATED ---------------- */
-export async function getTransactionsPaginated(limit = 10, offset = 0, type = "ALL") {
+/**
+ * Get paginated transactions for a customer
+ * @param {number} customerId - The customer ID
+ * @param {any} lastCursor - last transaction key from previous page
+ * @returns {Promise<{transactions: Array, lastCursor: any, hasMore: boolean}>}
+ */
+export async function getCustomerTransactionsPaginated(customerId, lastCursor = null) {
   const db = await dbPromise;
+  const tx = db.transaction(["transactions", "customers"], "readonly");
+  const txStore = tx.objectStore("transactions");
+  const customerStore = tx.objectStore("customers");
+  const index = txStore.index("customerId");
 
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(["transactions", "customers"], "readonly");
-    const txStore = tx.objectStore("transactions");
-    const customerStore = tx.objectStore("customers");
+  const transactions = [];
+  let cursor = await index.openCursor(IDBKeyRange.only(customerId), "prev"); // latest first
 
-    const req = txStore.openCursor(null, "prev"); // latest first
-    const results = [];
-    let skipped = 0;
+  // Skip until lastCursor
+  if (lastCursor) {
+    while (cursor && cursor.key !== lastCursor) {
+      cursor = await cursor.continue();
+    }
+    if (cursor) cursor = await cursor.continue();
+  }
 
-    req.onsuccess = (event) => {
-      const cursor = event.target.result;
+  // Collect PAGE_SIZE items
+  while (cursor && transactions.length < PAGE_SIZE) {
+    const txData = cursor.value;
 
-      if (!cursor) {
-        resolve(results);
-        return;
-      }
+    // Get customer info
+    const customer = await customerStore.get(txData.customerId);
+    transactions.push({
+      ...txData,
+      customerName: customer?.name || "Unknown",
+      customerPhone: customer?.phone || "N/A",
+    });
 
-      const transaction = cursor.value;
+    cursor = await cursor.continue();
+  }
 
-      // Filter by type if needed
-      if (type === "ALL" || transaction.type === type) {
-        if (skipped < offset) {
-          skipped++;
-          cursor.continue();
-          return;
-        }
+  await tx.done;
 
-        if (results.length < limit) {
-          const customerReq = customerStore.get(transaction.customerId);
-          customerReq.onsuccess = () => {
-            const customer = customerReq.result || { name: "Unknown", phone: "N/A" };
-            results.push({
-              ...transaction,
-              customerName: customer.name,
-              customerPhone: customer.phone,
-            });
-            cursor.continue();
-          };
-          customerReq.onerror = () => {
-            results.push({
-              ...transaction,
-              customerName: "Unknown",
-              customerPhone: "N/A",
-            });
-            cursor.continue();
-          };
-        } else {
-          resolve(results);
-        }
-      } else {
-        cursor.continue();
-      }
-    };
-
-    req.onerror = () => reject("Failed to load transactions");
-  });
+  return {
+    transactions,
+    lastCursor: transactions.length ? cursor?.key ?? null : null,
+    hasMore: transactions.length === PAGE_SIZE,
+  };
 }

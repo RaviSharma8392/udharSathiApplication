@@ -4,7 +4,7 @@ import { formatDistanceToNow } from "date-fns";
 export default function CustomerCard({ customer, onClick, onReminder }) {
   const { name, createdAt, balance, lastTransactionDate } = customer;
 
-  // ✅ Normalize balance safely
+  //  Normalize balance safely
   const numericBalance = Number(balance) || 0;
 
   // ----------------- DYNAMIC STATUS -----------------
