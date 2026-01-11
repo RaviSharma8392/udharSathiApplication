@@ -14,8 +14,8 @@ import AllCustomers from "../pages/customers/AllCustomers";
 import TransactionsHistoryPage from "../pages/transtion/TransactionsHistoryPage";
 import SelectCustomerPage from "../pages/customers/SelectCustomerPage";
 import MerchantAccount from "../pages/screen/MerchantAccount";
-import WelcomeScreen from "../pages/welcome/WelcomeScreen";
 import MerchantEditProfile from "../pages/account/MerchantEditProfile";
+import WelcomeScreen from "../pages/screens/WelcomeScreen";
 
 const MerchantRoutes = () => {
   return (
