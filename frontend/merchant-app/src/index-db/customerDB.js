@@ -1,14 +1,14 @@
-import { openDB } from "./index";
+import { dbPromise } from "./index";
 
 /* ---------------- ADD CUSTOMER ---------------- */
 export async function addCustomer(customer) {
-  const db = await openDB();
+  const db = await dbPromise;
 
   return new Promise((resolve, reject) => {
     const tx = db.transaction("customers", "readwrite");
     tx.objectStore("customers").add({
       ...customer,
-      balance: customer.balance ?? 0, 
+      balance: customer.balance ?? 0,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
@@ -20,7 +20,7 @@ export async function addCustomer(customer) {
 
 /* ---------------- GET CUSTOMER BY ID ---------------- */
 export async function getCustomerById(id) {
-  const db = await openDB();
+  const db = await dbPromise;
 
   return new Promise((resolve, reject) => {
     const tx = db.transaction("customers", "readonly");
@@ -34,7 +34,7 @@ export async function getCustomerById(id) {
 
 /* ---------------- GET ALL CUSTOMERS ---------------- */
 export async function getAllCustomers() {
-  const db = await openDB();
+  const db = await dbPromise;
 
   return new Promise((resolve, reject) => {
     const tx = db.transaction("customers", "readonly");
@@ -43,11 +43,7 @@ export async function getAllCustomers() {
 
     request.onsuccess = () => {
       const customers = request.result || [];
-
-      customers.sort(
-        (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
-      );
-
+      customers.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       resolve(customers);
     };
 
@@ -55,29 +51,25 @@ export async function getAllCustomers() {
   });
 }
 
+/* ---------------- UPDATE CUSTOMER BALANCE ---------------- */
 export async function updateCustomerBalance(id, { amount, type }) {
-  const db = await openDB();
+  const db = await dbPromise;
 
   return new Promise((resolve, reject) => {
     const tx = db.transaction("customers", "readwrite");
     const store = tx.objectStore("customers");
 
     const getReq = store.get(Number(id));
-
     getReq.onsuccess = () => {
       const customer = getReq.result;
       if (!customer) return reject("Customer not found");
 
       const currentBalance = Number(customer.balance) || 0;
       const numericAmount = Number(amount) || 0;
-
       let newBalance = currentBalance;
 
-      if (type === "UDHAR") {
-        newBalance = currentBalance + numericAmount;
-      } else if (type === "PAYMENT") {
-        newBalance = currentBalance - numericAmount;
-      }
+      if (type === "UDHAR") newBalance += numericAmount;
+      else if (type === "PAYMENT") newBalance -= numericAmount;
 
       store.put({
         ...customer,
@@ -93,7 +85,7 @@ export async function updateCustomerBalance(id, { amount, type }) {
 
 /* ---------------- DELETE CUSTOMER BY ID ---------------- */
 export async function deleteCustomerById(id) {
-  const db = await openDB();
+  const db = await dbPromise;
 
   return new Promise((resolve, reject) => {
     const tx = db.transaction("customers", "readwrite");

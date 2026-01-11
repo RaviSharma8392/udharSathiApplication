@@ -1,34 +1,30 @@
 import { useEffect, useState, useRef } from "react";
-import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
-import { getTransactionsPaginated } from "../../index-db/transactionDB";
+import { getTransactionsPaginated } from "../../index-db//transactionDB";
 import { TransactionCard } from "../../components/transationHistory/TransationHistoryCard";
-import NavbarHeadar from "../../components/add-customer/NavbarHeadar";
+import NavbarHeader from "../../components/add-customer/NavbarHeadar";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 
 const LIMIT = 10;
 
+// Group transactions into "Today", "Yesterday", "Month Year"
 function groupByMonth(transactions) {
   const groups = {};
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
 
   transactions.forEach((tx) => {
-    const date = new Date(tx.date);
-    const today = new Date();
-
+    const date = new Date(tx.date || tx.createdAt);
     let label;
 
-    if (date.toDateString() === today.toDateString()) {
-      label = "Today";
-    } else if (
-      new Date(today.setDate(today.getDate() - 1)).toDateString() ===
-      date.toDateString()
-    ) {
+    if (date.toDateString() === today.toDateString()) label = "Today";
+    else if (date.toDateString() === yesterday.toDateString())
       label = "Yesterday";
-    } else {
+    else
       label = date.toLocaleString("default", {
         month: "long",
         year: "numeric",
       });
-    }
 
     if (!groups[label]) groups[label] = [];
     groups[label].push(tx);
@@ -47,29 +43,27 @@ const TransactionsHistoryPage = () => {
 
   const loaderRef = useRef(null);
 
-  /* ---------- LOAD DATA ---------- */
+  /* ---------- LOAD TRANSACTIONS ---------- */
   const loadTransactions = async (reset = false) => {
     if (loading) return;
-
     setLoading(true);
 
-    const data = await getTransactionsPaginated(LIMIT, reset ? 0 : offset);
+    const data = await getTransactionsPaginated(
+      LIMIT,
+      reset ? 0 : offset,
+      filter
+    );
 
     setTransactions((prev) => {
       if (reset) return data;
 
       const map = new Map();
-
-      [...prev, ...data].forEach((tx) => {
-        map.set(`${tx.id}-${tx.date}`, tx);
-      });
-
+      [...prev, ...data].forEach((tx) => map.set(`${tx.id}-${tx.date}`, tx));
       return Array.from(map.values());
     });
 
     setOffset((prev) => (reset ? LIMIT : prev + LIMIT));
     if (data.length < LIMIT) setHasMore(false);
-
     setLoading(false);
   };
 
@@ -104,15 +98,15 @@ const TransactionsHistoryPage = () => {
     const matchType = filter === "ALL" ? true : tx.type === filter;
 
     const matchSearch =
-      tx.customerName.toLowerCase().includes(search.toLowerCase()) ||
-      tx.customerPhone.includes(search);
+      tx.customerName?.toLowerCase().includes(search.toLowerCase()) ||
+      tx.customerPhone?.includes(search);
 
     return matchType && matchSearch;
   });
 
   return (
     <div className="min-h-screen bg-[#F7F8FA] p-4 pb-24">
-      <NavbarHeadar />
+      <NavbarHeader />
 
       {/* 🔍 Search */}
       <div className="mt-4 flex items-center bg-white rounded-xl px-3 py-2 border border-gray-200">
@@ -124,8 +118,9 @@ const TransactionsHistoryPage = () => {
           className="w-full text-sm outline-none bg-transparent"
         />
       </div>
+
       {/* Filters */}
-      <div className="flex  gap-6 text-sm my-5">
+      <div className="flex gap-6 text-sm my-5">
         {["ALL", "UDHAR", "PAYMENT"].map((tab) => (
           <button
             key={tab}
@@ -145,10 +140,9 @@ const TransactionsHistoryPage = () => {
         {groupByMonth(visibleTransactions).map(([label, items]) => (
           <div key={label}>
             <p className="text-xs font-semibold text-gray-400 mb-2">{label}</p>
-
             <div className="space-y-3">
               {items.map((tx) => (
-                <TransactionCard key={tx.id} tx={tx} />
+                <TransactionCard key={`${tx.id}-${tx.date}`} tx={tx} />
               ))}
             </div>
           </div>
