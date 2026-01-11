@@ -14,7 +14,7 @@ const ProtectedRoute = () => {
   }, [user]);
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/welcome" replace />;
   }
 
   if (isPlanExpired(user.planExpiryDate)) {

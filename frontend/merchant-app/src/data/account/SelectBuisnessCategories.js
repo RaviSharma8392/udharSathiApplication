@@ -1,0 +1,15 @@
+export const categories = [
+  { id: "kirana", icon: "🛒", color: "bg-pink-500" },
+  { id: "medical", icon: "💊", color: "bg-green-500" },
+  { id: "apparel", icon: "👕", color: "bg-orange-500" },
+  { id: "electronics", icon: "🧊", color: "bg-blue-500" },
+  { id: "mobile", icon: "📱", color: "bg-gray-700" },
+  { id: "financial", icon: "🏦", color: "bg-blue-600" },
+  { id: "insurance", icon: "👨‍👩‍👧", color: "bg-green-600" },
+  { id: "digital", icon: "💻", color: "bg-orange-600" },
+  { id: "agriculture", icon: "🌾", color: "bg-green-700" },
+  { id: "education", icon: "🎓", color: "bg-pink-600" },
+  { id: "computer", icon: "🖥️", color: "bg-gray-800" },
+  { id: "travel", icon: "🏖️", color: "bg-pink-700" },
+  { id: "other", icon: "🏪", color: "bg-blue-700" },
+];

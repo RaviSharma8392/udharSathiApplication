@@ -2,7 +2,7 @@ import { services } from "../../data/services";
 
 const ServicesGrid = () => {
   return (
-    <div className="px-4 pt-4">
+    <div className=" pt-4">
       <div className="grid grid-cols-3 gap-4">
         {services.map((service, index) => {
           const Icon = service.icon;

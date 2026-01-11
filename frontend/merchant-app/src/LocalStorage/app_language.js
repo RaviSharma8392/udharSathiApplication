@@ -1,20 +1,21 @@
-const LANGUAGE_KEY = "app_language";
 
-// Set app language
-export function setLanguage(lang) {
+
+const LANGUAGE_KEY = "app_language";
+// Save language to localStorage
+export function setLanguage(langCode) {
   try {
-    localStorage.setItem(LANGUAGE_KEY, lang);
+    localStorage.setItem(LANGUAGE_KEY, langCode);
   } catch (e) {
     console.error("Failed to save language", e);
   }
 }
 
-// Get app language
-
+// Get language from localStorage
 export function getLanguage() {
   try {
     return localStorage.getItem(LANGUAGE_KEY) || "en";
   } catch (e) {
+    console.error("Failed to get language", e);
     return "en";
   }
 }

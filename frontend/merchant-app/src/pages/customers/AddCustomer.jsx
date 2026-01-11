@@ -72,7 +72,7 @@ export default function AddCustomer() {
           <div className="flex gap-3">
             {/* Country Code */}
             <div className="flex items-center gap-2 px-4 py-3 bg-white border border-gray-200 rounded-xl">
-              <img src="/flag.png" className="h-5 w-5" alt="India" />
+              <img src="/icons/flag.png" className="h-5 w-5" alt="India" />
               <span className="text-sm font-medium text-gray-700">+91</span>
             </div>
 
