@@ -81,3 +81,17 @@ export async function searchCustomers(query) {
       c.phone?.includes(query)
   );
 }
+
+
+// UPDATE
+export async function updateCustomer(id, data) {
+  const db = await dbPromise;
+  const existing = await db.get("customers", Number(id));
+  if (!existing) throw new Error("Customer not found");
+
+  return db.put("customers", {
+    ...existing,
+    ...data,
+    updatedAt: new Date().toISOString(),
+  });
+}

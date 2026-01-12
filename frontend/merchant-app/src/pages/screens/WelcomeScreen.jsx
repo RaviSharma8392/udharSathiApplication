@@ -10,15 +10,14 @@ const WelcomeScreen = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-white">
+    <div className="h-screen flex flex-col bg-white">
       {/* Top Navbar */}
       <InWelcomeNavbar />
 
       {/* Image Section */}
       <div
         className="relative flex-1 flex items-center justify-center cursor-pointer"
-        onClick={goToLogin} // Click anywhere on this div triggers redirect
-      >
+        onClick={goToLogin}>
         <img
           src="/banner/welcomeAppBanner.jpg"
           alt="Welcome"

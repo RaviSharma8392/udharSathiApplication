@@ -1,4 +1,4 @@
-// src/config/bottomTabs.js
+
 
 import {
   Home,
@@ -28,11 +28,11 @@ export const bottomTabs = [
   {
     name: "customers",
     icon: Users,
-    route: "/customers",
+    route: "customers",
   },
   {
     name: "account",
     icon: UserCircle,
-    route: "/account",
+    route: "account",
   },
 ];

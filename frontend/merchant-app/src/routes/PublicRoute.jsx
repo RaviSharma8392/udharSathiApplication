@@ -3,7 +3,14 @@ import { getMerchantUser } from "../utils/auth";
 
 const PublicRoute = () => {
   const user = getMerchantUser();
-  return user ? <Navigate to="/" replace /> : <Outlet />;
+
+  // If logged in → go to dashboard
+  if (user) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // If not logged in → allow access
+  return <Outlet />;
 };
 
 export default PublicRoute;

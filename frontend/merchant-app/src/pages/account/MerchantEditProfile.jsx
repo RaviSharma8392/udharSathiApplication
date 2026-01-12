@@ -4,8 +4,8 @@ import NavbarHeadar from "../../components/add-customer/NavbarHeadar";
 import MerchantProfilePhoto from "../../components/merchant-account/MerchantProfilePhoto";
 import MerchnatAccountInputField from "../../components/merchant-account/MerchnatAccountInputField";
 import BusinessCategoryInput from "../../components/merchant-account/BusinessCategoryInput";
-import { MerchantAddressField } from "../../components/merchant-account/MerchantTextareaField";
 import { AddressPopup } from "../../components/merchant-account/AddressPopup";
+import AddressField from "../../components/merchant-account/AddressField";
 
 /* ---------- COMPONENTS ---------- */
 
@@ -98,7 +98,7 @@ export default function MerchantEditProfile() {
           />
 
           {/* Address Field */}
-          <MerchantAddressField
+          <AddressField
             address={address.full}
             onClick={() => setOpenAddressPopup(true)}
           />
