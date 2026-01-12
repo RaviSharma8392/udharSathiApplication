@@ -1,4 +1,4 @@
-import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+  import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 
 export async function generateTransactionPDF(customer, transactions) {
   if (!transactions || transactions.length === 0) return;

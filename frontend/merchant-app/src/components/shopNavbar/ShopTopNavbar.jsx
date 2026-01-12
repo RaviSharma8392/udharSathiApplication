@@ -1,17 +1,21 @@
+import { useNavigate } from "react-router-dom";
 import { Bell } from "lucide-react";
 
 function MerchantTopNavbar({
-  merchantName = "Ravi SHarma",
+  merchantName = "Ravi Sharma",
   merchantImage = "https://lh3.googleusercontent.com/a/ACg8ocIwpj58aEAJ93c_iO7XgkorGFW7A_9ruqw1B5v1tmKyyKEH2m0Z=s360-c-no",
   greeting = "Welcome back!",
 }) {
+  const navigate = useNavigate();
+
   return (
     <div className="flex items-center justify-between mb-5">
       <div className="flex items-center gap-3">
         <img
           src={merchantImage}
-          className="w-10 h-10 rounded-full"
+          className="w-10 h-10 rounded-full cursor-pointer"
           alt="profile"
+          onClick={() => navigate("/account/edit")}
         />
         <div>
           <p className="text-sm font-medium text-gray-900">
