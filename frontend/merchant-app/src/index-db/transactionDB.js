@@ -1,420 +1,337 @@
-import { dbPromise } from "./index";
+const DB_NAME = "UdharSathiDB";
+const DB_VERSION = 1;
 
-/**
- * Add a transaction
- * @param {Object} txData
- * @param {number} txData.customerId
- * @param {"UDHAR"|"PAYMENT"} txData.type
- * @param {number} txData.amount
- * @param {number} [txData.balanceBefore]
- */
-export async function addTransaction(txData) {
-  const db = await dbPromise;
+let db; // native IndexedDB instance
 
-  if (!txData?.customerId) throw new Error("customerId is required");
-  if (!["UDHAR", "PAYMENT"].includes(txData.type))
-    throw new Error("Invalid transaction type");
-  if (txData.amount == null) throw new Error("Transaction amount is required");
+// Open DB
+export function openDatabase() {
+  return new Promise((resolve, reject) => {
+    if (db) return resolve(db);
 
-  const customerId = Number(txData.customerId);
-  const amount = Number(txData.amount);
-  const balanceBefore = Number(txData.balanceBefore ?? 0);
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-  let balanceAfter = balanceBefore;
-  if (txData.type === "UDHAR") balanceAfter += amount;
-  if (txData.type === "PAYMENT") balanceAfter -= amount;
+    request.onupgradeneeded = (event) => {
+      const database = event.target.result;
 
-  const transactionId = `TX-${Date.now()}-${Math.random()
-    .toString(36)
-    .slice(2, 8)}`;
+      // Customers store
+      if (!database.objectStoreNames.contains("customers")) {
+        const store = database.createObjectStore("customers", { keyPath: "id" });
+        store.createIndex("name", "name", { unique: false });
+        store.createIndex("phone", "phone", { unique: false });
+      }
 
-  return db.add("transactions", {
-    id: transactionId,
-    customerId,
-    type: txData.type,
-    amount,
-    balanceBefore,
-    balanceAfter,
-    date: new Date().toISOString(),
+      // Transactions store
+      if (!database.objectStoreNames.contains("transactions")) {
+        const store = database.createObjectStore("transactions", { keyPath: "id" });
+        store.createIndex("customerId", "customerId", { unique: false });
+        store.createIndex("date", "date", { unique: false });
+        store.createIndex("type", "type", { unique: false });
+      }
+    };
+
+    request.onsuccess = (event) => {
+      db = event.target.result;
+      resolve(db);
+    };
+
+    request.onerror = (event) => reject(event.target.error);
+  });
+}
+
+/* ================================
+   ADD TRANSACTION
+================================ */
+export function addTransaction(txData) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      if (!txData?.customerId) throw new Error("customerId is required");
+      if (!["UDHAR", "PAYMENT"].includes(txData.type))
+        throw new Error("Invalid transaction type");
+      if (txData.amount == null) throw new Error("Transaction amount is required");
+
+      const database = await openDatabase();
+
+      const customerId = Number(txData.customerId);
+      const amount = Number(txData.amount);
+      const balanceBefore = Number(txData.balanceBefore ?? 0);
+
+      let balanceAfter = balanceBefore;
+      if (txData.type === "UDHAR") balanceAfter += amount;
+      if (txData.type === "PAYMENT") balanceAfter -= amount;
+
+      const transactionId = `TX-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+      const tx = database.transaction("transactions", "readwrite");
+      const store = tx.objectStore("transactions");
+
+      const request = store.add({
+        id: transactionId,
+        customerId,
+        type: txData.type,
+        amount,
+        balanceBefore,
+        balanceAfter,
+        date: new Date().toISOString(),
+      });
+
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = (e) => reject(e.target.error);
+    } catch (err) {
+      reject(err);
+    }
   });
 }
 
 /* ================================
    GET TRANSACTIONS BY CUSTOMER
 ================================ */
+export function getTransactionsByCustomer(customerId) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const database = await openDatabase();
+      const tx = database.transaction("transactions", "readonly");
+      const store = tx.objectStore("transactions");
+      const index = store.index("customerId");
 
-export async function getTransactionsByCustomer(customerId) {
-  const db = await dbPromise;
-  return db.getAllFromIndex(
-    "transactions",
-    "customerId",
-    Number(customerId)
-  );
+      const request = index.getAll(Number(customerId));
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = (e) => reject(e.target.error);
+    } catch (err) {
+      reject(err);
+    }
+  });
 }
 
 /* ================================
    GET RECENT TRANSACTIONS
 ================================ */
+export function getRecentTransactions(limit = 10) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const database = await openDatabase();
+      const results = [];
 
-// export async function getRecentTransactions(limit = 10) {
-//   const db = await dbPromise;
-//   const results = [];
+      // Load customers first to avoid multiple async calls
+      const customerTx = database.transaction("customers", "readonly");
+      const customerStore = customerTx.objectStore("customers");
+      const customerRequest = customerStore.getAll();
 
-//   let cursor = await db
-//     .transaction(["transactions", "customers"], "readonly")
-//     .objectStore("transactions")
-//     .openCursor(null, "prev");
+      customerRequest.onsuccess = async () => {
+        const customersArray = customerRequest.result;
+        const customerMap = {};
+        customersArray.forEach((c) => (customerMap[c.id] = c));
 
-//   while (cursor && results.length < limit) {
-//     const tx = cursor.value;
-//     const customer = (await db.get("customers", tx.customerId)) || {};
+        // Transactions
+        const tx = database.transaction("transactions", "readonly");
+        const store = tx.objectStore("transactions");
+        const cursorRequest = store.openCursor(null, "prev");
 
-//     results.push({
-//       ...tx,
-//       customerName: customer.name || "Unknown",
-//       customerPhone: customer.phone || "N/A",
-//     });
+        cursorRequest.onsuccess = (e) => {
+          const cursor = e.target.result;
+          if (cursor && results.length < limit) {
+            const txData = cursor.value;
+            const customer = customerMap[txData.customerId];
 
-//     cursor = await cursor.continue();
-//   }
+            results.push({
+              ...txData,
+              customerName: customer?.name || "Unknown",
+              customerPhone: customer?.phone || "N/A",
+            });
 
-//   return results;
-// }
-// export async function getRecentTransactions(limit = 10) {
-//   const db = await dbPromise;
-//   const results = [];
+            cursor.continue();
+          } else {
+            resolve(results);
+          }
+        };
 
-//   const transaction = db.transaction(
-//     ["transactions", "customers"],
-//     "readonly"
-//   );
+        cursorRequest.onerror = (e) => reject(e.target.error);
+      };
 
-//   const txStore = transaction.objectStore("transactions");
-//   const customerStore = transaction.objectStore("customers");
-
-//   let cursor = await txStore.openCursor(null, "prev");
-
-//   while (cursor && results.length < limit) {
-//     const tx = cursor.value;
-
-//     // ✅ SAFE: same transaction
-//     const customer = await customerStore.get(tx.customerId);
-
-//     results.push({
-//       ...tx,
-//       customerName: customer?.name || "Unknown",
-//       customerPhone: customer?.phone || "N/A",
-//     });
-
-//     cursor = await cursor.continue();
-//   }
-
-//   await transaction.done;
-//   return results;
-// }
-// export async function getRecentTransactions(limit = 10) {
-//   const db = await dbPromise;
-//   const results = [];
-
-//   const transaction = db.transaction(
-//     ["transactions", "customers"],
-//     "readonly"
-//   );
-
-//   const txStore = transaction.objectStore("transactions");
-//   const customerStore = transaction.objectStore("customers");
-
-//   let cursor = await txStore.openCursor(null, "prev");
-
-//   while (cursor && results.length < limit) {
-//     const tx = cursor.value;
-
-//     // ✅ SAME TRANSACTION → SAFE
-//     const customer = await customerStore.get(tx.customerId);
-
-//     results.push({
-//       ...tx,
-//       customerName: customer?.name || "Unknown",
-//       customerPhone: customer?.phone || "N/A",
-//     });
-
-//     cursor = await cursor.continue();
-//   }
-
-//   await transaction.done;
-//   return results;
-// }
-
-
-
-// this function is for testing in mobikle
-export async function getRecentTransactions(limit = 10) {
-  const db = await dbPromise;
-
-  // 1️⃣ Load all customers first
-  const customersArray = await db.getAll("customers");
-  const customerMap = {};
-  customersArray.forEach((c) => {
-    customerMap[c.id] = c;
-  });
-
-  // 2️⃣ Open transaction for transactions only
-  const transaction = db.transaction("transactions", "readonly");
-  const txStore = transaction.objectStore("transactions");
-
-  const results = [];
-  let cursor = await txStore.openCursor(null, "prev");
-
-  while (cursor && results.length < limit) {
-    const tx = cursor.value;
-    const customer = customerMap[tx.customerId]; // map instead of await
-
-    results.push({
-      ...tx,
-      customerName: customer?.name || "Unknown",
-      customerPhone: customer?.phone || "N/A",
-    });
-
-    cursor = await cursor.continue();
-  }
-
-  await transaction.done;
-  return results;
-}
-
-export async function getTodayTransactions(limit = 10) {
-  const db = await dbPromise;
-  const results = [];
-
-  const transaction = db.transaction(
-    ["transactions", "customers"],
-    "readonly"
-  );
-
-  const txStore = transaction.objectStore("transactions");
-  const customerStore = transaction.objectStore("customers");
-
-  const now = new Date();
-  const startOfDay = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate()
-  );
-
-  let cursor = await txStore.openCursor(null, "prev");
-
-  while (cursor && results.length < limit) {
-    const tx = cursor.value;
-    const txDate = new Date(tx.date);
-
-    if (txDate >= startOfDay) {
-      const customer = await customerStore.get(tx.customerId);
-      results.push({
-        ...tx,
-        customerName: customer?.name || "Unknown",
-        customerPhone: customer?.phone || "N/A",
-      });
+      customerRequest.onerror = (e) => reject(e.target.error);
+    } catch (err) {
+      reject(err);
     }
-
-    cursor = await cursor.continue();
-  }
-
-  await transaction.done;
-  return results;
+  });
 }
-
-
 
 /* ================================
    CALCULATE TOTALS
 ================================ */
+export function calculateTotals({ type = "ALL", customerId } = {}) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const database = await openDatabase();
+      let totalUdhar = 0;
+      let totalPayment = 0;
+      customerId = customerId != null ? Number(customerId) : null;
 
-export async function calculateTotals({ type = "ALL", customerId } = {}) {
-  const db = await dbPromise;
+      const now = new Date();
+      let fromDate = null;
 
-  let totalUdhar = 0;
-  let totalPayment = 0;
+      if (type === "TODAY") fromDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      else if (type === "LAST_7_DAYS")
+        fromDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      else if (type === "LAST_MONTH") fromDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+      else if (type === "LAST_YEAR") fromDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
 
-  customerId = customerId != null ? Number(customerId) : null;
+      const tx = database.transaction("transactions", "readonly");
+      const store = tx.objectStore("transactions");
+      const cursorRequest = store.openCursor();
 
-  const now = new Date();
-  let fromDate = null;
+      cursorRequest.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (cursor) {
+          const txData = cursor.value;
 
-  if (type === "TODAY")
-    fromDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  else if (type === "LAST_7_DAYS")
-    fromDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  else if (type === "LAST_MONTH")
-    fromDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
-  else if (type === "LAST_YEAR")
-    fromDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+          if (!customerId || txData.customerId === customerId) {
+            const txDate = new Date(txData.date);
+            if (!isNaN(txDate) && (!fromDate || txDate >= fromDate)) {
+              const amt = Number(txData.amount) || 0;
+              if (txData.type === "UDHAR") totalUdhar += amt;
+              if (txData.type === "PAYMENT") totalPayment += amt;
+            }
+          }
 
-  let cursor = await db
-    .transaction("transactions", "readonly")
-    .objectStore("transactions")
-    .openCursor();
+          cursor.continue();
+        } else {
+          resolve({ totalUdhar, totalPayment });
+        }
+      };
 
-  while (cursor) {
-    const tx = cursor.value;
-
-    if (!customerId || tx.customerId === customerId) {
-      const txDate = new Date(tx.date);
-      if (!isNaN(txDate) && (!fromDate || txDate >= fromDate)) {
-        const amt = Number(tx.amount) || 0;
-        if (tx.type === "UDHAR") totalUdhar += amt;
-        if (tx.type === "PAYMENT") totalPayment += amt;
-      }
+      cursorRequest.onerror = (e) => reject(e.target.error);
+    } catch (err) {
+      reject(err);
     }
-
-    cursor = await cursor.continue();
-  }
-
-  return { totalUdhar, totalPayment };
+  });
 }
 
-/* ================================
-   PAGINATED TRANSACTIONS (GLOBAL)
-================================ */
-
-// export async function getTransactionsPaginated(
-//   limit = 10,
-//   offset = 0,
-//   type = "ALL"
-// ) {
-//   const db = await dbPromise;
-//   const results = [];
-//   let skipped = 0;
-
-//   let cursor = await db
-//     .transaction(["transactions", "customers"], "readonly")
-//     .objectStore("transactions")
-//     .openCursor(null, "prev");
-
-//   while (cursor && results.length < limit) {
-//     const tx = cursor.value;
-
-//     if (type === "ALL" || tx.type === type) {
-//       if (skipped < offset) {
-//         skipped++;
-//       } else {
-//         const customer = (await db.get("customers", tx.customerId)) || {};
-//         results.push({
-//           ...tx,
-//           customerName: customer.name || "Unknown",
-//           customerPhone: customer.phone || "N/A",
-//         });
-//       }
-//     }
-
-//     cursor = await cursor.continue();
-//   }
-
-//   return results;
-// }
-
-/* ================================
-   CUSTOMER PAGINATION (CURSOR)
-================================ */
 
 const PAGE_SIZE = 7;
 
 /**
  * Get paginated transactions for a customer
- * @param {number} customerId
- * @param {any} lastCursor
+ * @param {string|number} customerId
+ * @param {any} lastCursor - last cursor key from previous page
  */
-export async function getCustomerTransactionsPaginated(
-  customerId,
-  lastCursor = null
-) {
-  const db = await dbPromise;
-  const transaction = db.transaction(
-    ["transactions", "customers"],
-    "readonly"
-  );
+export function getCustomerTransactionsPaginated(customerId, lastCursor = null) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const db = await openDatabase();
+      const transactions = [];
 
-  const txStore = transaction.objectStore("transactions");
-  const customerStore = transaction.objectStore("customers");
-  const index = txStore.index("customerId");
+      // Load all customers
+      const customerTx = db.transaction("customers", "readonly");
+      const customerStore = customerTx.objectStore("customers");
+      const getAllCustReq = customerStore.getAll();
 
-  const transactions = [];
-  let lastKey = null;
+      getAllCustReq.onsuccess = () => {
+        const customerMap = {};
+        getAllCustReq.result.forEach(c => customerMap[c.id] = c);
 
-  let cursor = await index.openCursor(
-    IDBKeyRange.only(Number(customerId)),
-    "prev"
-  );
+        // Transactions
+        const tx = db.transaction("transactions", "readonly");
+        const txStore = tx.objectStore("transactions");
+        const index = txStore.index("customerId");
 
-  if (lastCursor) {
-    while (cursor && cursor.key !== lastCursor) {
-      cursor = await cursor.continue();
+        const range = IDBKeyRange.only(Number(customerId));
+        const cursorRequest = index.openCursor(range, "prev");
+
+        let lastKey = null;
+
+        cursorRequest.onsuccess = (e) => {
+          const cursor = e.target.result;
+          if (cursor && transactions.length < PAGE_SIZE) {
+            const txData = cursor.value;
+            lastKey = cursor.key;
+
+            const customer = customerMap[txData.customerId];
+            transactions.push({
+              ...txData,
+              customerName: customer?.name || "Unknown",
+              customerPhone: customer?.phone || "N/A"
+            });
+
+            cursor.continue();
+          } else {
+            resolve({
+              transactions,
+              lastCursor: lastKey,
+              hasMore: transactions.length === PAGE_SIZE
+            });
+          }
+        };
+
+        cursorRequest.onerror = (e) => reject(e.target.error);
+      };
+
+      getAllCustReq.onerror = (e) => reject(e.target.error);
+
+    } catch (err) {
+      reject(err);
     }
-    if (cursor) cursor = await cursor.continue();
-  }
-
-  while (cursor && transactions.length < PAGE_SIZE) {
-    lastKey = cursor.key;
-
-    const txData = cursor.value;
-    const customer = await customerStore.get(txData.customerId);
-
-    transactions.push({
-      ...txData,
-      customerName: customer?.name || "Unknown",
-      customerPhone: customer?.phone || "N/A",
-    });
-
-    cursor = await cursor.continue();
-  }
-
-  await transaction.done;
-
-  return {
-    transactions,
-    lastCursor: lastKey,
-    hasMore: transactions.length === PAGE_SIZE,
-  };
+  });
 }
-export async function getTransactionsPaginated(
-  limit = 10,
-  offset = 0,
-  type = "ALL"
-) {
-  const db = await dbPromise;
-  const results = [];
-  let skipped = 0;
 
-  const transaction = db.transaction(
-    ["transactions", "customers"],
-    "readonly"
-  );
 
-  const txStore = transaction.objectStore("transactions");
-  const customerStore = transaction.objectStore("customers");
 
-  let cursor = await txStore.openCursor(null, "prev");
+/**
+ * Get paginated transactions (global, all customers)
+ * @param {number} limit - number of transactions per page
+ * @param {number} offset - number of transactions to skip
+ * @param {"ALL"|"UDHAR"|"PAYMENT"} type
+ */
+export function getTransactionsPaginated(limit = 10, offset = 0, type = "ALL") {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const db = await openDatabase();
+      const results = [];
+      let skipped = 0;
 
-  while (cursor && results.length < limit) {
-    const tx = cursor.value;
+      // 1️⃣ Load all customers first
+      const customerTx = db.transaction("customers", "readonly");
+      const customerStore = customerTx.objectStore("customers");
+      const customerReq = customerStore.getAll();
 
-    if (type === "ALL" || tx.type === type) {
-      if (skipped < offset) {
-        skipped++;
-      } else {
-        // ✅ SAFE: same transaction, no db.get
-        const customer = await customerStore.get(tx.customerId);
+      customerReq.onsuccess = () => {
+        const customerMap = {};
+        customerReq.result.forEach(c => (customerMap[c.id] = c));
 
-        results.push({
-          ...tx,
-          customerName: customer?.name || "Unknown",
-          customerPhone: customer?.phone || "N/A",
-        });
-      }
+        // 2️⃣ Transactions cursor
+        const tx = db.transaction(["transactions"], "readonly");
+        const txStore = tx.objectStore("transactions");
+        const cursorReq = txStore.openCursor(null, "prev"); // newest first
+
+        cursorReq.onsuccess = (e) => {
+          const cursor = e.target.result;
+          if (!cursor || results.length >= limit) {
+            return resolve(results);
+          }
+
+          const txData = cursor.value;
+
+          // Filter type
+          if (type === "ALL" || txData.type === type) {
+            if (skipped < offset) {
+              skipped++;
+            } else {
+              const customer = customerMap[txData.customerId];
+              results.push({
+                ...txData,
+                customerName: customer?.name || "Unknown",
+                customerPhone: customer?.phone || "N/A"
+              });
+            }
+          }
+
+          cursor.continue();
+        };
+
+        cursorReq.onerror = (e) => reject(e.target.error);
+      };
+
+      customerReq.onerror = (e) => reject(e.target.error);
+    } catch (err) {
+      reject(err);
     }
-
-    cursor = await cursor.continue();
-  }
-
-  await transaction.done;
-  return results;
+  });
 }

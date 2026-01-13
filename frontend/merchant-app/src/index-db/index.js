@@ -1,58 +1,89 @@
-import { openDB } from "idb";
+const DB_NAME = "UdharSathiDB";
+const DB_VERSION = 1;
 
-export const DB_NAME = "UdharSathiDB";
-export const DB_VERSION = 1;
-
-// Open DB and create stores
-export const dbPromise = openDB(DB_NAME, DB_VERSION, {
-  upgrade(db) {
-    // Customers store
-    if (!db.objectStoreNames.contains("customers")) {
-      const store = db.createObjectStore("customers", {
-        keyPath: "id", // dynamic generated ID
-      });
-      store.createIndex("name", "name");
-      store.createIndex("phone", "phone");
-    }
-
-    // Transactions store
-    if (!db.objectStoreNames.contains("transactions")) {
-      const store = db.createObjectStore("transactions", {
-        keyPath: "id", // transaction ID (dynamic)
-      });
-      store.createIndex("customerId", "customerId");
-      store.createIndex("date", "date");
-      store.createIndex("type", "type");
-    }
-  },
-});
+let db; // native IDBDatabase instance
 
 /**
- * Add a new customer with dynamic ID
- * @param {Object} customer - { name: string, phone?: string, balance?: number }
+ * Open IndexedDB
  */
-export async function addCustomer(customer) {
-  if (!customer.name) throw new Error("Customer name is mandatory");
+export function openDatabase() {
+  return new Promise((resolve, reject) => {
+    if (db) return resolve(db); // already opened
 
-  const db = await dbPromise;
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-  // Generate dynamic long ID: CUS-{timestamp}-{random4}
-  const timestamp = Date.now(); // milliseconds
-  const random4 = Math.floor(Math.random() * 9000 + 1000); // 1000-9999
-  const customerId = `CUS-${timestamp}-${random4}`;
+    request.onupgradeneeded = (event) => {
+      const database = event.target.result;
 
-  const newCustomer = {
-    id: customerId,
-    name: customer.name,
-    phone: customer.phone || null,
-    balance: Number(customer.balance || 0),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
+      // Customers store
+      if (!database.objectStoreNames.contains("customers")) {
+        const store = database.createObjectStore("customers", { keyPath: "id" });
+        store.createIndex("name", "name", { unique: false });
+        store.createIndex("phone", "phone", { unique: false });
+      }
 
-  await db.add("customers", newCustomer);
+      // Transactions store
+      if (!database.objectStoreNames.contains("transactions")) {
+        const store = database.createObjectStore("transactions", { keyPath: "id" });
+        store.createIndex("customerId", "customerId", { unique: false });
+        store.createIndex("date", "date", { unique: false });
+        store.createIndex("type", "type", { unique: false });
+      }
+    };
 
-  return newCustomer;
+    request.onsuccess = (event) => {
+      db = event.target.result;
+      resolve(db);
+    };
+
+    request.onerror = (event) => {
+      reject(event.target.error);
+    };
+  });
 }
 
+/**
+ * Add a new customer
+ * @param {Object} customer { name: string, phone?: string, balance?: number }
+ * @returns {Promise<Object>} the added customer
+ */
+export function addCustomer(customer) {
+  return new Promise(async (resolve, reject) => {
+    if (!customer.name) return reject(new Error("Customer name is mandatory"));
 
+    try {
+      const database = await openDatabase();
+
+      const tx = database.transaction("customers", "readwrite");
+      const store = tx.objectStore("customers");
+
+      // Generate ID
+      const timestamp = Date.now();
+      const random4 = Math.floor(Math.random() * 9000 + 1000);
+      const customerId = `CUS-${timestamp}-${random4}`;
+
+      const newCustomer = {
+        id: customerId,
+        name: customer.name,
+        phone: customer.phone || null,
+        balance: Number(customer.balance || 0),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      const request = store.add(newCustomer);
+
+      request.onsuccess = () => resolve(newCustomer);
+      request.onerror = (event) => reject(event.target.error);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+/**
+ * Example usage:
+ * addCustomer({ name: "Ravi", phone: "9876543210" })
+ *   .then(c => console.log("Added", c))
+ *   .catch(err => console.error(err));
+ */

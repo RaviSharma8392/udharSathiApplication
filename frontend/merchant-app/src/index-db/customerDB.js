@@ -1,122 +1,185 @@
-import { dbPromise } from "./index";
+// transactionDB.js
+export function openDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open("UdharSathiDB", 1);
+
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+
+      if (!db.objectStoreNames.contains("customers")) {
+        const store = db.createObjectStore("customers", { keyPath: "id", autoIncrement: true });
+        store.createIndex("name", "name", { unique: false });
+        store.createIndex("phone", "phone", { unique: false });
+      }
+    };
+
+    request.onsuccess = (event) => resolve(event.target.result);
+    request.onerror = (event) => reject(event.target.error);
+  });
+}
 
 /* ---------------- ADD CUSTOMER ---------------- */
-// export async function addCustomer(customer) {
-//   const db = await dbPromise;
+export function addCustomer(customer) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const db = await openDatabase();
+      const tx = db.transaction("customers", "readwrite");
+      const store = tx.objectStore("customers");
 
-//   return db.add("customers", {
-//     ...customer,
-//     balance: customer.balance ?? 0,
-//     createdAt: new Date().toISOString(),
-//     updatedAt: new Date().toISOString(),
-//   });
-// }
+      const now = new Date().toISOString();
+      const newCustomer = {
+        ...customer,
+        balance: customer.balance ?? 0,
+        createdAt: now,
+        updatedAt: now,
+      };
 
+      const request = store.add(newCustomer);
 
-// this is also for mobile version
-
-export async function addCustomer(customer) {
-  const db = await dbPromise;
-
-  // Use an explicit transaction
-  const tx = db.transaction("customers", "readwrite");
-  const store = tx.objectStore("customers");
-
-  const now = new Date().toISOString();
-  const newCustomer = {
-    ...customer,
-    balance: customer.balance ?? 0,
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  const id = await store.add(newCustomer);
-
-  await tx.done; // ensure transaction finishes
-  return id;
+      request.onsuccess = () => resolve(request.result); // returns generated id
+      request.onerror = (e) => reject(e.target.error);
+    } catch (err) {
+      reject(err);
+    }
+  });
 }
-
-
 
 /* ---------------- GET CUSTOMER BY ID ---------------- */
-export async function getCustomerById(id) {
-  const db = await dbPromise;
-  return db.get("customers", Number(id));
-}
+export function getCustomerById(id) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const db = await openDatabase();
+      const tx = db.transaction("customers", "readonly");
+      const store = tx.objectStore("customers");
 
+      const request = store.get(Number(id));
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = (e) => reject(e.target.error);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
 
 /* ---------------- GET ALL CUSTOMERS ---------------- */
-export async function getAllCustomers() {
-  const db = await dbPromise;
-  const customers = await db.getAll("customers");
+export function getAllCustomers() {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const db = await openDatabase();
+      const tx = db.transaction("customers", "readonly");
+      const store = tx.objectStore("customers");
 
-  return customers.sort(
-    (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
-  );
+      const request = store.getAll();
+      request.onsuccess = () => {
+        const sorted = request.result.sort(
+          (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+        );
+        resolve(sorted);
+      };
+      request.onerror = (e) => reject(e.target.error);
+    } catch (err) {
+      reject(err);
+    }
+  });
 }
 
+/* ---------------- UPDATE CUSTOMER ---------------- */
+export function updateCustomer(id, data) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const db = await openDatabase();
+      const tx = db.transaction("customers", "readwrite");
+      const store = tx.objectStore("customers");
 
-/* ---------------- UPDATE CUSTOMER BALANCE ---------------- */
-export async function updateCustomerBalance(id, { amount, type }) {
-  const db = await dbPromise;
+      const getRequest = store.get(Number(id));
+      getRequest.onsuccess = () => {
+        const existing = getRequest.result;
+        if (!existing) return reject(new Error("Customer not found"));
 
-  const normalizedType = String(type).trim().toUpperCase();
-  const numericAmount = Number(amount);
+        const updated = { ...existing, ...data, updatedAt: new Date().toISOString() };
+        const putRequest = store.put(updated);
 
-  if (!numericAmount || numericAmount <= 0) {
-    throw new Error("Invalid amount");
-  }
-
-  const customer = await db.get("customers", Number(id));
-  if (!customer) throw new Error("Customer not found");
-
-  const currentBalance = Number(customer.balance) || 0;
-
-  let newBalance = currentBalance;
-
-  if (normalizedType === "UDHAR") {
-    newBalance += numericAmount;
-  } else if (normalizedType === "PAYMENT") {
-    newBalance -= numericAmount;
-  } else {
-    throw new Error("Invalid transaction type");
-  }
-
-  customer.balance = newBalance;
-  customer.updatedAt = new Date().toISOString();
-
-  return db.put("customers", customer);
+        putRequest.onsuccess = () => resolve(putRequest.result);
+        putRequest.onerror = (e) => reject(e.target.error);
+      };
+      getRequest.onerror = (e) => reject(e.target.error);
+    } catch (err) {
+      reject(err);
+    }
+  });
 }
 
+/* ---------------- UPDATE BALANCE ---------------- */
+export function updateCustomerBalance(id, { amount, type }) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const db = await openDatabase();
+      const tx = db.transaction("customers", "readwrite");
+      const store = tx.objectStore("customers");
 
-/* ---------------- DELETE CUSTOMER BY ID ---------------- */
-export async function deleteCustomerById(id) {
-  const db = await dbPromise;
-  return db.delete("customers", Number(id));
+      const getRequest = store.get(Number(id));
+      getRequest.onsuccess = () => {
+        const customer = getRequest.result;
+        if (!customer) return reject(new Error("Customer not found"));
+
+        const numericAmount = Number(amount);
+        if (!numericAmount || numericAmount <= 0)
+          return reject(new Error("Invalid amount"));
+
+        if (type === "UDHAR") customer.balance += numericAmount;
+        else if (type === "PAYMENT") customer.balance -= numericAmount;
+        else return reject(new Error("Invalid transaction type"));
+
+        customer.updatedAt = new Date().toISOString();
+        const putRequest = store.put(customer);
+
+        putRequest.onsuccess = () => resolve(putRequest.result);
+        putRequest.onerror = (e) => reject(e.target.error);
+      };
+      getRequest.onerror = (e) => reject(e.target.error);
+    } catch (err) {
+      reject(err);
+    }
+  });
 }
 
+/* ---------------- DELETE CUSTOMER ---------------- */
+export function deleteCustomerById(id) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const db = await openDatabase();
+      const tx = db.transaction("customers", "readwrite");
+      const store = tx.objectStore("customers");
 
-export async function searchCustomers(query) {
-  const db = await dbPromise;
-  const customers = await db.getAll("customers");
-
-  return customers.filter(
-    (c) =>
-      c.name?.toLowerCase().includes(query.toLowerCase()) ||
-      c.phone?.includes(query)
-  );
+      const request = store.delete(Number(id));
+      request.onsuccess = () => resolve(true);
+      request.onerror = (e) => reject(e.target.error);
+    } catch (err) {
+      reject(err);
+    }
+  });
 }
 
+/* ---------------- SEARCH CUSTOMERS ---------------- */
+export function searchCustomers(query) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const db = await openDatabase();
+      const tx = db.transaction("customers", "readonly");
+      const store = tx.objectStore("customers");
 
-// UPDATE
-export async function updateCustomer(id, data) {
-  const db = await dbPromise;
-  const existing = await db.get("customers", Number(id));
-  if (!existing) throw new Error("Customer not found");
-
-  return db.put("customers", {
-    ...existing,
-    ...data,
-    updatedAt: new Date().toISOString(),
+      const request = store.getAll();
+      request.onsuccess = () => {
+        const filtered = request.result.filter(
+          (c) =>
+            c.name?.toLowerCase().includes(query.toLowerCase()) ||
+            c.phone?.includes(query)
+        );
+        resolve(filtered);
+      };
+      request.onerror = (e) => reject(e.target.error);
+    } catch (err) {
+      reject(err);
+    }
   });
 }
