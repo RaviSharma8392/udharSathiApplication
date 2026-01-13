@@ -36,14 +36,9 @@ const MerchantRoutes = () => {
       <Route element={<ProtectedRoute />}>
         <Route path="/dashboard" element={<MerchantHomeLayout />}>
           <Route index element={<HomePage />} />
-          <Route path="customers" element={<AllCustomers />} />
-          <Route path="account" element={<MerchantAccount />} />
 
-          <Route path="customers-remind" element={<AllCustomers />} />
-          <Route
-            path="customers/:customerId/ledger"
-            element={<CustomerLedger />}
-          />
+          {/* <Route path="customers" element={<AllCustomers />} /> */}
+          <Route path="account" element={<MerchantAccount />} />
         </Route>
 
         <Route path="account/edit" element={<MerchantEditProfile />} />
@@ -55,8 +50,13 @@ const MerchantRoutes = () => {
           path="transactions-history"
           element={<TransactionsHistoryPage />}
         />
-        <Route path="customers/manage" element={<ManageCustomers />} />
         <Route path="select-customers" element={<SelectCustomerPage />} />
+        <Route
+          path="customers/:customerId/ledger"
+          element={<CustomerLedger />}
+        />
+        <Route path="customers-remind" element={<AllCustomers />} />
+        <Route path="customers" element={<ManageCustomers />} />
       </Route>
 
       {/* STATIC PAGES */}

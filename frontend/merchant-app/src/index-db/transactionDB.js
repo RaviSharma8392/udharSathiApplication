@@ -80,6 +80,38 @@ export async function getTransactionsByCustomer(customerId) {
 
 //   return results;
 // }
+// export async function getRecentTransactions(limit = 10) {
+//   const db = await dbPromise;
+//   const results = [];
+
+//   const transaction = db.transaction(
+//     ["transactions", "customers"],
+//     "readonly"
+//   );
+
+//   const txStore = transaction.objectStore("transactions");
+//   const customerStore = transaction.objectStore("customers");
+
+//   let cursor = await txStore.openCursor(null, "prev");
+
+//   while (cursor && results.length < limit) {
+//     const tx = cursor.value;
+
+//     // ✅ SAFE: same transaction
+//     const customer = await customerStore.get(tx.customerId);
+
+//     results.push({
+//       ...tx,
+//       customerName: customer?.name || "Unknown",
+//       customerPhone: customer?.phone || "N/A",
+//     });
+
+//     cursor = await cursor.continue();
+//   }
+
+//   await transaction.done;
+//   return results;
+// }
 export async function getRecentTransactions(limit = 10) {
   const db = await dbPromise;
   const results = [];
@@ -97,7 +129,7 @@ export async function getRecentTransactions(limit = 10) {
   while (cursor && results.length < limit) {
     const tx = cursor.value;
 
-    // ✅ SAFE: same transaction
+    // ✅ SAME TRANSACTION → SAFE
     const customer = await customerStore.get(tx.customerId);
 
     results.push({
@@ -112,6 +144,48 @@ export async function getRecentTransactions(limit = 10) {
   await transaction.done;
   return results;
 }
+
+export async function getTodayTransactions(limit = 10) {
+  const db = await dbPromise;
+  const results = [];
+
+  const transaction = db.transaction(
+    ["transactions", "customers"],
+    "readonly"
+  );
+
+  const txStore = transaction.objectStore("transactions");
+  const customerStore = transaction.objectStore("customers");
+
+  const now = new Date();
+  const startOfDay = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate()
+  );
+
+  let cursor = await txStore.openCursor(null, "prev");
+
+  while (cursor && results.length < limit) {
+    const tx = cursor.value;
+    const txDate = new Date(tx.date);
+
+    if (txDate >= startOfDay) {
+      const customer = await customerStore.get(tx.customerId);
+      results.push({
+        ...tx,
+        customerName: customer?.name || "Unknown",
+        customerPhone: customer?.phone || "N/A",
+      });
+    }
+
+    cursor = await cursor.continue();
+  }
+
+  await transaction.done;
+  return results;
+}
+
 
 
 /* ================================

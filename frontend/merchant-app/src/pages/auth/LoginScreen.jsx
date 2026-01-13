@@ -19,19 +19,34 @@ const LoginScreen = () => {
   const handleSubmit = (e) => {
     e.preventDefault();
     setError("");
-    if (!identifier.trim() || !password.trim()) {
-      setError("Please enter both identifier and password.");
-      return;
-    }
 
-    // Minimal local auth simulation
-    const merchantUser = { id: Date.now(), identifier };
+    // if (!identifier.trim() || !password.trim()) {
+    //   setError("Please enter both identifier and password.");
+    //   return;
+    // }
+
+    // Create dummy merchant user data
+    const merchantUser = {
+      id: Date.now(), // Unique ID
+      identifier, // Phone number or email input
+      password, // For demo purposes only (never do this in real apps!)
+      merchantId: "M" + Math.floor(Math.random() * 10000), // Dummy merchant ID
+      phoneNumber: identifier, // Save input phone number
+      createdAt: new Date().toISOString(),
+    };
+
+    // Save to localStorage
     localStorage.setItem("merchantUser", JSON.stringify(merchantUser));
-    navigate("/");
+
+    // Optional: log to console for debugging
+    console.log("Dummy merchantUser saved:", merchantUser);
+
+    // Navigate to home/dashboard
+    navigate("/dashboardd");
   };
 
   return (
-    <div className="min-h-screen w-full flex justify-center px-4 relative bg-[#f7f7fb]">
+    <div className="min-h-screen w-full flex justify-center px-4 relative bg-white">
       {/* Background SVG */}
       <img
         src="/login-illustration.svg"
@@ -40,7 +55,7 @@ const LoginScreen = () => {
       />
 
       {/* LOGIN CARD */}
-      <div className="w-full max-w-sm bg-white pt-5 px-6 rounded-lg shadow-lg">
+      <div className="w-full max-w-sm bg-white pt-5 px-6 ">
         <LanguageSelector setLanguage={setLanguage} />
 
         <Logo />

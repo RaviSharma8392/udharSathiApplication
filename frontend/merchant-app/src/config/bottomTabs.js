@@ -23,12 +23,12 @@ export const bottomTabs = [
     name: "addCustomer",
     icon: PlusCircle,
     center: true,
-    route: "select-customers",
+    route: "/select-customers",
   },
   {
     name: "customers",
     icon: Users,
-    route: "customers",
+    route: "/customers",
   },
   {
     name: "account",

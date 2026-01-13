@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import DashboardCard from "../../components/home/DashboardCard";
 import ActionButtonsGrid from "../../components/home/ActionButtonsGrid";
 import RecentTransactions from "../../components/home/RecentTransactions";
+import { DashboardCard } from "../../components/home/DashboardCard";
 import {
   getRecentTransactions,
   calculateTotals,
@@ -10,57 +10,65 @@ import {
 const HomePage = () => {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  const [totals, setTotals] = useState({ totalReceived: 0, totalUdhar: 0 });
+  const [totals, setTotals] = useState({
+    today: {
+      received: 0,
+      udhar: 0,
+    },
+    last7Days: {
+      received: 0,
+      udhar: 0,
+    },
+  });
 
   useEffect(() => {
-    const loadTransactions = async () => {
+    const loadData = async () => {
       setLoading(true);
       try {
-        // 1️⃣ Calculate totals for TODAY
+        // 🔹 TODAY totals
         const todayTotals = await calculateTotals({ type: "TODAY" });
+
+        // 🔹 LAST 7 DAYS totals
+        const last7DaysTotals = await calculateTotals({
+          type: "LAST_7_DAYS",
+        });
+
         setTotals({
-          totalReceived: todayTotals.totalPayment,
-          totalUdhar: todayTotals.totalUdhar,
+          today: {
+            received: todayTotals.totalPayment,
+            udhar: todayTotals.totalUdhar,
+          },
+          last7Days: {
+            received: last7DaysTotals.totalPayment,
+            udhar: last7DaysTotals.totalUdhar,
+          },
         });
 
-        // 2️⃣ Load recent transactions (limit 10) for today
-        const recentToday = await getRecentTransactions(10);
-
-        // Filter transactions to TODAY only
-        const now = new Date();
-        const startOfDay = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          now.getDate()
-        );
-        const todayTransactions = recentToday.filter((tx) => {
-          const txDate = new Date(tx.date || tx.createdAt);
-          return txDate >= startOfDay;
-        });
-
-        setTransactions(todayTransactions);
+        // 🔹 Recent transactions (NO filtering)
+        const recent = await getRecentTransactions(10);
+        setTransactions(recent);
       } catch (err) {
-        console.error("Error loading transactions:", err);
+        console.error("Error loading dashboard:", err);
       } finally {
         setLoading(false);
       }
     };
 
-    loadTransactions();
+    loadData();
   }, []);
 
   return (
     <div className="min-h-screen bg-[#F7F8FA] pb-24">
       {/* Dashboard totals */}
       <DashboardCard
-        totalReceived={totals.totalReceived}
-        totalUdhar={totals.totalUdhar}
+        totalReceived={totals.last7Days.received}
+        totalUdhar={totals.last7Days.udhar}
+        label="Last 7 Days"
       />
 
       <ActionButtonsGrid />
 
-      {/* Recent transactions today */}
+      {/* Recent transactions */}
       <RecentTransactions transactions={transactions} loading={loading} />
     </div>
   );

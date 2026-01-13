@@ -27,7 +27,7 @@ export default function ManageCustomers() {
         </h1>
 
         <button
-          onClick={() => navigate("/dashboard/customers/add")}
+          onClick={() => navigate("/add-customer")}
           className="flex items-center gap-1 bg-[#2F4CD1] text-white px-4 py-2 rounded-xl text-sm">
           <PlusIcon className="h-4 w-4" />
           Add
@@ -60,7 +60,7 @@ export default function ManageCustomers() {
 
               {/* Edit */}
               <button
-                onClick={() => navigate(`/dashboard/customers/edit/${c.id}`)}
+                onClick={() => navigate(`/customers/${c.id}/edit`)}
                 className="p-2 rounded-lg hover:bg-gray-100">
                 <PencilIcon className="h-4 w-4 text-gray-500" />
               </button>

@@ -1,32 +1,27 @@
-import React from "react";
-
-// helper to format large numbers
 const formatAmount = (amount) => {
   const num = Number(amount);
+  if (!Number.isFinite(num)) return "0";
 
-  // invalid numbers
-  if (!Number.isFinite(num) || num <= 0) return "0";
+  const abs = Math.abs(num);
+  if (abs >= 1e10) return "10,00,00,000+";
 
-  // remove decimals, count digits only
-  const digitCount = Math.floor(Math.abs(num)).toString().length;
-
-  // ❌ more than 10 digits → don't show
-  if (digitCount > 10) return "—";
-
-  // normal Indian formatting
   return num.toLocaleString("en-IN");
 };
 
-const DashboardCard = ({ totalReceived = 0, totalUdhar = 0 }) => {
+export const DashboardCard = ({
+  totalReceived = 0,
+  totalUdhar = 0,
+  label = "Last 7 Days",
+}) => {
   return (
     <div className="bg-[#EEF2FF] rounded-xl p-4 shadow-sm">
       <p className="font-semibold text-gray-900">Payment Summary</p>
-      <p className="text-xs text-gray-500 mb-3">Last 7 Days</p>
+      <p className="text-xs text-gray-500 mb-3">{label}</p>
 
       <div className="flex justify-between items-center">
         {/* Received */}
         <div>
-          <p className="font-semibold text-gray-900">Received</p>
+          <p className="text-sm text-gray-700">Received</p>
           <p className="text-lg font-semibold text-green-600">
             ₹{formatAmount(totalReceived)}
           </p>
@@ -36,7 +31,7 @@ const DashboardCard = ({ totalReceived = 0, totalUdhar = 0 }) => {
 
         {/* Udhar */}
         <div>
-          <p className="font-semibold text-gray-900">Udhar</p>
+          <p className="text-sm text-gray-700">Udhar</p>
           <p className="text-lg font-semibold text-red-500">
             ₹{formatAmount(totalUdhar)}
           </p>
@@ -45,5 +40,3 @@ const DashboardCard = ({ totalReceived = 0, totalUdhar = 0 }) => {
     </div>
   );
 };
-
-export default DashboardCard;
