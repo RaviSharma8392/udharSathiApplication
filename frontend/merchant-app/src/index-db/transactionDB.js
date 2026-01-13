@@ -335,3 +335,4 @@ export function getTransactionsPaginated(limit = 10, offset = 0, type = "ALL") {
     }
   });
 }
+ 
