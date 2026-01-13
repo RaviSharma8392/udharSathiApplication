@@ -1,16 +1,41 @@
 import { dbPromise } from "./index";
 
 /* ---------------- ADD CUSTOMER ---------------- */
+// export async function addCustomer(customer) {
+//   const db = await dbPromise;
+
+//   return db.add("customers", {
+//     ...customer,
+//     balance: customer.balance ?? 0,
+//     createdAt: new Date().toISOString(),
+//     updatedAt: new Date().toISOString(),
+//   });
+// }
+
+
+// this is also for mobile version
+
 export async function addCustomer(customer) {
   const db = await dbPromise;
 
-  return db.add("customers", {
+  // Use an explicit transaction
+  const tx = db.transaction("customers", "readwrite");
+  const store = tx.objectStore("customers");
+
+  const now = new Date().toISOString();
+  const newCustomer = {
     ...customer,
     balance: customer.balance ?? 0,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  });
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const id = await store.add(newCustomer);
+
+  await tx.done; // ensure transaction finishes
+  return id;
 }
+
 
 
 /* ---------------- GET CUSTOMER BY ID ---------------- */

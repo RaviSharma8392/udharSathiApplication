@@ -66,7 +66,7 @@ export default function AddCustomer() {
     }
 
     setShowSuccess(true);
-    setTimeout(() => navigate("/dashboard/customers"), 1500);
+    setTimeout(() => navigate("/customers"), 1500);
   };
 
   // 🔹 DELETE

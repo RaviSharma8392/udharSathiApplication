@@ -112,25 +112,62 @@ export async function getTransactionsByCustomer(customerId) {
 //   await transaction.done;
 //   return results;
 // }
+// export async function getRecentTransactions(limit = 10) {
+//   const db = await dbPromise;
+//   const results = [];
+
+//   const transaction = db.transaction(
+//     ["transactions", "customers"],
+//     "readonly"
+//   );
+
+//   const txStore = transaction.objectStore("transactions");
+//   const customerStore = transaction.objectStore("customers");
+
+//   let cursor = await txStore.openCursor(null, "prev");
+
+//   while (cursor && results.length < limit) {
+//     const tx = cursor.value;
+
+//     // ✅ SAME TRANSACTION → SAFE
+//     const customer = await customerStore.get(tx.customerId);
+
+//     results.push({
+//       ...tx,
+//       customerName: customer?.name || "Unknown",
+//       customerPhone: customer?.phone || "N/A",
+//     });
+
+//     cursor = await cursor.continue();
+//   }
+
+//   await transaction.done;
+//   return results;
+// }
+
+
+
+// this function is for testing in mobikle
 export async function getRecentTransactions(limit = 10) {
   const db = await dbPromise;
-  const results = [];
 
-  const transaction = db.transaction(
-    ["transactions", "customers"],
-    "readonly"
-  );
+  // 1️⃣ Load all customers first
+  const customersArray = await db.getAll("customers");
+  const customerMap = {};
+  customersArray.forEach((c) => {
+    customerMap[c.id] = c;
+  });
 
+  // 2️⃣ Open transaction for transactions only
+  const transaction = db.transaction("transactions", "readonly");
   const txStore = transaction.objectStore("transactions");
-  const customerStore = transaction.objectStore("customers");
 
+  const results = [];
   let cursor = await txStore.openCursor(null, "prev");
 
   while (cursor && results.length < limit) {
     const tx = cursor.value;
-
-    // ✅ SAME TRANSACTION → SAFE
-    const customer = await customerStore.get(tx.customerId);
+    const customer = customerMap[tx.customerId]; // map instead of await
 
     results.push({
       ...tx,
