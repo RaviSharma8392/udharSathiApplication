@@ -42,7 +42,7 @@ const LoginScreen = () => {
     console.log("Dummy merchantUser saved:", merchantUser);
 
     // Navigate to home/dashboard
-    navigate("/dashboardd");
+    navigate("/dashboard");
   };
 
   return (
