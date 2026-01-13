@@ -1,4 +1,4 @@
-const DB_NAME = "UdharSathiDB";
+const DB_NAME = "UdharSathiAppDB";
 const DB_VERSION = 1;
 
 let db; // native IDBDatabase instance
@@ -8,39 +8,29 @@ let db; // native IDBDatabase instance
  */
 export function openDatabase() {
   return new Promise((resolve, reject) => {
-    if (db) return resolve(db); // already opened
-
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onupgradeneeded = (event) => {
       const database = event.target.result;
-
-      // Customers store
-      if (!database.objectStoreNames.contains("customers")) {
-        const store = database.createObjectStore("customers", { keyPath: "id" });
-        store.createIndex("name", "name", { unique: false });
-        store.createIndex("phone", "phone", { unique: false });
-      }
-
-      // Transactions store
-      if (!database.objectStoreNames.contains("transactions")) {
-        const store = database.createObjectStore("transactions", { keyPath: "id" });
-        store.createIndex("customerId", "customerId", { unique: false });
-        store.createIndex("date", "date", { unique: false });
-        store.createIndex("type", "type", { unique: false });
-      }
+      
     };
 
     request.onsuccess = (event) => {
-      db = event.target.result;
-      resolve(db);
+      const database = event.target.result;
+
+      database.onversionchange = () => {
+        database.close();
+        db = null;
+      };
+
+      db = database;
+      resolve(database);
     };
 
-    request.onerror = (event) => {
-      reject(event.target.error);
-    };
+    request.onerror = () => reject(request.error);
   });
 }
+
 
 /**
  * Add a new customer

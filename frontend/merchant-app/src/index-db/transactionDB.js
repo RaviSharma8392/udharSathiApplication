@@ -1,4 +1,4 @@
-const DB_NAME = "UdharSathiDB";
+const DB_NAME = "UdharSathiAppDB";
 const DB_VERSION = 1;
 
 let db; // native IndexedDB instance
